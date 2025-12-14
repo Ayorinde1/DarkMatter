@@ -1,0 +1,15 @@
+# IDE settings
+.idea/
+
+# Virtual environment
+.venv/
+
+# Proxies
+proxies/
+
+# Settings
+settings.json
+
+# Python cache
+__pycache__/
+*.pyc
