@@ -6,7 +6,7 @@
     "min_time": "15",
     "max_time": "60",
     "proxy_source": "File",
-    "proxy_file_path": "O:/Development/Web-Apps/web-traffic-tool/proxies/gsa.txt",
+    "proxy_file_path": "O:/Development/Web-Apps/web-traffic-tool/proxies/socks.txt",
     "proxy_url": "",
     "proxy_protocol": "SOCKS4/5",
     "manual_proxies": "##Shadow Socks##\nsocks5://192.168.50.110:1080\n\n##",

@@ -16,6 +16,7 @@ from tkinter import filedialog
 from playwright.sync_api import sync_playwright
 from fake_useragent import UserAgent
 import urllib3
+import pycountry  # pip install pycountry
 
 # Suppress InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -33,7 +34,6 @@ class CTkToolTip(object):
 
     def __init__(self, widget, text='widget info'):
         self.wait_time = 500  # milliseconds
-        self.wrap_length = 180
         self.widget = widget
         self.text = text
         self.widget.bind("<Enter>", self.enter)
@@ -65,18 +65,14 @@ class CTkToolTip(object):
         x += self.widget.winfo_rootx() + 25
         y += self.widget.winfo_rooty() + 20
 
-        # creates a toplevel window
         self.tw = ctk.CTkToplevel(self.widget)
         self.tw.wm_overrideredirect(True)
         self.tw.wm_geometry("+%d+%d" % (x, y))
 
-        # Tooltip Label
         label = ctk.CTkLabel(self.tw, text=self.text, justify='left',
                              fg_color="#2b2b2b", text_color="white",
                              corner_radius=6, width=100)
         label.pack(ipadx=5, ipady=5)
-
-        # Lift above everything
         self.tw.attributes("-topmost", True)
 
     def hidetip(self):
@@ -103,10 +99,11 @@ class SettingsManager:
             "proxy_url": "",
             "proxy_protocol": "HTTP",
             "manual_proxies": "# Example:\n# 192.168.1.1:8080\n# socks5://user:pass@host:port",
-            "test_url": "http://httpbin.org/json",  # Better default for checking IP
+            "test_url": "http://httpbin.org/json",
             "test_timeout": "10",
             "test_threads": "20",
-            "test_gateway": ""
+            "test_gateway": "",
+            "scraper_sources": "sources.txt"
         }
 
     def load(self):
@@ -128,6 +125,56 @@ class SettingsManager:
                 json.dump(data, f, indent=4)
         except Exception as e:
             print(f"Error saving settings: {e}")
+
+
+class ProxyScraper:
+    @staticmethod
+    def scrape(sources_file="sources.txt"):
+        """
+        Reads URLs from sources.txt, fetches them, and extracts IP:Port patterns.
+        """
+        proxies = set()
+        logs = []
+
+        # Create sources.txt if it doesn't exist
+        if not os.path.exists(sources_file):
+            with open(sources_file, "w") as f:
+                f.write(
+                    "https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all\n")
+                f.write("https://spys.me/proxy.txt\n")
+            logs.append(f"Created default {sources_file}")
+
+        try:
+            with open(sources_file, "r") as f:
+                urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        except Exception as e:
+            return [], [f"Error reading sources: {e}"]
+
+        if not urls:
+            return [], ["No sources found in sources.txt"]
+
+        # Regex pattern for IP:Port
+        # Captures 0.0.0.0 to 999.999.999.999:00000 (loose matching)
+        proxy_pattern = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}:\d{2,5}\b")
+
+        def fetch_url(url):
+            try:
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    found = proxy_pattern.findall(resp.text)
+                    return found, f"Fetched {len(found)} from {url}"
+                return [], f"Failed {url} (Status {resp.status_code})"
+            except Exception as e:
+                return [], f"Error {url}: {str(e)[:30]}"
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            results = executor.map(fetch_url, urls)
+
+        for found_list, log_msg in results:
+            proxies.update(found_list)
+            logs.append(log_msg)
+
+        return list(proxies), logs
 
 
 class ProxyManager:
@@ -183,10 +230,22 @@ class ProxyManager:
 
 class ProxyChecker:
     @staticmethod
-    def get_flag_emoji(country_code):
+    def get_country_data(country_code):
+        """
+        Uses pycountry to get the official name and generates a flag emoji.
+        """
         if not country_code or len(country_code) != 2:
-            return "🏳️"
-        return chr(ord(country_code[0]) + 127397) + chr(ord(country_code[1]) + 127397)
+            return "Unknown", "🏳️"
+
+        try:
+            country = pycountry.countries.get(alpha_2=country_code.upper())
+            name = country.name if country else "Unknown"
+        except:
+            name = "Unknown"
+
+        # Offset calculation for emoji flag
+        flag = chr(ord(country_code[0].upper()) + 127397) + chr(ord(country_code[1].upper()) + 127397)
+        return name, flag
 
     @staticmethod
     def check_proxy(proxy, target_url, timeout, real_ip):
@@ -201,7 +260,6 @@ class ProxyChecker:
             "error": ""
         }
 
-        # Setup proxies dict for requests
         proxies = {"http": proxy, "https": proxy}
 
         try:
@@ -210,20 +268,15 @@ class ProxyChecker:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
 
-            # Using verify=False to handle proxies with self-signed certs (common in free lists)
             response = requests.get(target_url, proxies=proxies, timeout=timeout, verify=False, headers=headers)
             end_time = time.time()
 
             result["speed"] = int((end_time - start_time) * 1000)
             result["status"] = "Active"
 
-            # --- Advanced Data Parsing ---
             try:
-                # Try parsing as JSON (works for httpbin.org/json)
                 data = response.json()
-
-                # 1. Anonymity Check
-                origin_ip = data.get("origin", "").split(',')[0]  # httpbin can return multiple IPs
+                origin_ip = data.get("origin", "").split(',')[0]
                 response_headers = data.get("headers", {})
 
                 via = response_headers.get("Via") or response_headers.get("via")
@@ -236,19 +289,14 @@ class ProxyChecker:
                 else:
                     result["anonymity"] = "Elite"
             except:
-                # Fallback for non-JSON endpoints
                 result["anonymity"] = "Active"
 
-            # 2. Country/Geo Check (Separate simplified API call to avoid rate limiting the main attack loop)
-            # We only do this if the proxy is active
             try:
-                # Use the proxy to query an IP API
-                # NOTE: Using ip-api.com (free, rate limited) - In production use a DB
                 geo_url = "http://ip-api.com/json"
                 geo_resp = requests.get(geo_url, proxies=proxies, timeout=5)
                 if geo_resp.status_code == 200:
                     geo_data = geo_resp.json()
-                    result["country"] = geo_data.get("country", "Unknown")
+                    # Just get the code, we'll process the name in the UI thread using pycountry
                     result["country_code"] = geo_data.get("countryCode", "")
             except:
                 pass
@@ -315,6 +363,7 @@ class TrafficBotProApp(ctk.CTk):
         # State Variables
         self.is_running = False
         self.is_testing = False
+        self.is_scraping = False
         self.proxy_queue = queue.Queue()
         self.ua = UserAgent()
         self.success_count = 0
@@ -326,12 +375,10 @@ class TrafficBotProApp(ctk.CTk):
         self.active_threads = 0
         self.attack_start_time = 0
 
-        # --- Real IP Detection ---
         try:
             self.real_ip = requests.get("https://api.ipify.org", timeout=5).text
         except:
             self.real_ip = "0.0.0.0"
-        # -------------------------
 
         # --- GUI Layout ---
         self.grid_columnconfigure(0, weight=1)
@@ -418,13 +465,12 @@ class TrafficBotProApp(ctk.CTk):
             lbl.pack(pady=(0, 10))
             setattr(self, attr, lbl)
 
-        # --- NEW: Success Rate Card ---
+        # Success Rate Card
         card = ctk.CTkFrame(hud_frame, fg_color="#2b2b2b")
         card.grid(row=0, column=3, padx=10, pady=5, sticky="ew")
         ctk.CTkLabel(card, text="Success Rate", font=("Roboto", 12), text_color="#999999").pack(pady=(10, 0))
         self.success_rate_label = ctk.CTkLabel(card, text="0%", font=("Roboto Medium", 24), text_color="#2CC985")
         self.success_rate_label.pack(pady=(0, 10))
-        # ------------------------------
 
         # Dashboard Progress Section
         dash_prog_frame = ctk.CTkFrame(dashboard, fg_color="transparent")
@@ -458,12 +504,10 @@ class TrafficBotProApp(ctk.CTk):
         self.visits_entry = self.create_labeled_entry(attack_frame, "Total Visits:", self.settings["visits"])
         self.visits_entry.master.pack(fill="x", padx=10, pady=5)
 
-        # --- Proxy Protocol Selection ---
         protocol_frame = ctk.CTkFrame(attack_frame, fg_color="transparent")
         protocol_frame.pack(fill="x", padx=10, pady=5)
         ctk.CTkLabel(protocol_frame, text="Proxy Protocol:", text_color="#FFFFFF").pack(side="left", padx=(0, 10))
         self.protocol_var = ctk.StringVar(value=self.settings["proxy_protocol"])
-        # Added HTTPS support
         self.protocol_menu = ctk.CTkOptionMenu(protocol_frame, values=["HTTP", "HTTPS", "SOCKS4/5"],
                                                variable=self.protocol_var)
         self.protocol_menu.pack(side="left", fill="x", expand=True)
@@ -539,6 +583,19 @@ class TrafficBotProApp(ctk.CTk):
         self.proxy_url_entry.insert(0, self.settings["proxy_url"])
         self.proxy_url_entry.pack(fill="x")
 
+        # --- SCRAPER SECTION ---
+        scraper_frame = ctk.CTkFrame(source_frame, fg_color="transparent")
+        scraper_frame.pack(fill="x", padx=15, pady=5)
+
+        self.scrape_source_entry = ctk.CTkEntry(scraper_frame, placeholder_text="sources.txt")
+        self.scrape_source_entry.insert(0, self.settings.get("scraper_sources", "sources.txt"))
+        self.scrape_source_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        self.scrape_btn = ctk.CTkButton(scraper_frame, text="SCRAPE PROXIES", command=self.start_scraping,
+                                        fg_color="#E67E22", hover_color="#D35400", width=120)
+        self.scrape_btn.pack(side="right")
+        # -----------------------
+
         self.update_proxy_ui_state(self.settings["proxy_source"])
 
         # Tester
@@ -599,15 +656,20 @@ class TrafficBotProApp(ctk.CTk):
                                                fg_color="#555555")
         self.clear_results_btn.grid(row=0, column=3, padx=5, sticky="ew")
 
+        # FLUID GRID: Configure columns with weights
         self.proxy_results_grid = ctk.CTkScrollableFrame(results_frame, label_text="Proxy Test Results")
         self.proxy_results_grid.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        self.proxy_results_grid.grid_columnconfigure((0, 1, 2, 3, 4, 5, 6), weight=1)  # +1 col for Country
 
-        # --- MODIFIED HEADERS (Added Country) ---
+        # Configure grid columns (7 columns) to be responsive
+        for i in range(7):
+            self.proxy_results_grid.grid_columnconfigure(i, weight=1)
+
+        # --- HEADERS ---
         headers = ["IP", "Port", "Protocol", "Country", "Status", "Ping (ms)", "Anonymity"]
         for i, header in enumerate(headers):
+            # Using sticky="ew" to make it fill the weighted column
             ctk.CTkLabel(self.proxy_results_grid, text=header, font=("Roboto Medium", 12)).grid(row=0, column=i, padx=5,
-                                                                                                pady=5)
+                                                                                                pady=5, sticky="ew")
 
     def build_settings_frame(self):
         settings_frame = self.frames["settings"]
@@ -637,6 +699,10 @@ class TrafficBotProApp(ctk.CTk):
     def update_proxy_ui_state(self, choice):
         for widget in self.proxy_input_container.winfo_children():
             widget.pack_forget()
+        # SCRAPER: Don't hide the scraper UI, keep it visible in Manual/File/URL modes
+        # But for simplicity, we keep it in the container for now or separate?
+        # Current layout: Scraper is OUTSIDE the input container, so it stays visible.
+
         if choice == "Manual":
             self.manual_textbox.pack(fill="both", expand=True)
         elif choice == "File":
@@ -695,7 +761,8 @@ class TrafficBotProApp(ctk.CTk):
             "test_url": self.test_url_entry.get(),
             "test_timeout": self.test_timeout_entry.get(),
             "test_threads": self.test_threads_entry.get(),
-            "test_gateway": self.test_gateway_entry.get()
+            "test_gateway": self.test_gateway_entry.get(),
+            "scraper_sources": self.scrape_source_entry.get()
         }
         self.settings_manager.save(settings)
         self.log_message("Settings saved.", "success")
@@ -710,6 +777,43 @@ class TrafficBotProApp(ctk.CTk):
         elif source == "URL":
             data = self.proxy_url_entry.get()
         return ProxyManager.load_proxies(source, data, self.protocol_var.get())
+
+    # --- SCRAPING LOGIC ---
+    def start_scraping(self):
+        if self.is_scraping: return
+        self.is_scraping = True
+        self.scrape_btn.configure(state="disabled", text="SCRAPING...")
+        threading.Thread(target=self.run_scraper, daemon=True).start()
+
+    def run_scraper(self):
+        source_file = self.scrape_source_entry.get()
+        self.log_message(f"Starting scrape from {source_file}...", "info", "tester")
+
+        proxies, logs = ProxyScraper.scrape(source_file)
+
+        for log in logs:
+            self.log_message(log, "info", "tester")
+
+        if proxies:
+            # Update Manual Textbox
+            current_text = self.manual_textbox.get("1.0", "end-1c")
+            new_text = current_text + "\n" + "\n".join(proxies)
+
+            def _update_ui():
+                self.manual_textbox.delete("1.0", "end")
+                self.manual_textbox.insert("1.0", new_text)
+                self.proxy_source_var.set("Manual")
+                self.source_seg_btn.set("Manual")
+                self.update_proxy_ui_state("Manual")
+                self.scrape_btn.configure(state="normal", text="SCRAPE PROXIES")
+                self.is_scraping = False
+
+            self.after(0, _update_ui)
+            self.log_message(f"Scraped {len(proxies)} unique proxies. Added to Manual list.", "success", "tester")
+        else:
+            self.after(0, lambda: self.scrape_btn.configure(state="normal", text="SCRAPE PROXIES"))
+            self.is_scraping = False
+            self.log_message("No proxies found.", "warning", "tester")
 
     # --- MAIN BOT LOGIC ---
     def bot_task(self, task_id, url, min_time, max_time, headless_mode):
@@ -1006,10 +1110,11 @@ class TrafficBotProApp(ctk.CTk):
             ip, port = result["proxy"], "-"
 
         status_color = "#2CC985" if result["status"] == "Active" else "#e74c3c"
-        country_code = result.get("country_code", "")
-        flag = ProxyChecker.get_flag_emoji(country_code)
 
-        # --- UPDATED COLUMN LIST (7 Columns) ---
+        # Use pycountry for proper name
+        country_code = result.get("country_code", "")
+        full_country_name, flag = ProxyChecker.get_country_data(country_code)
+
         vals = [
             ip,
             port,
@@ -1021,16 +1126,16 @@ class TrafficBotProApp(ctk.CTk):
         ]
 
         for i, val in enumerate(vals):
+            # Sticky="ew" makes the label expand to fill the weighted column
             lbl = ctk.CTkLabel(self.proxy_results_grid, text=val)
             if i == 4:  # Status column
                 lbl.configure(text_color=status_color)
 
             # Add Tooltip for Country Flag
             if i == 3:  # Country Column
-                full_country_name = result.get("country", "Unknown")
                 CTkToolTip(lbl, text=full_country_name)
 
-            lbl.grid(row=row_index, column=i, padx=5, pady=2)
+            lbl.grid(row=row_index, column=i, padx=5, pady=2, sticky="ew")
 
     def clear_proxy_results(self):
         for widget in self.proxy_results_grid.winfo_children():
