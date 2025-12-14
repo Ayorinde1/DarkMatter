@@ -45,7 +45,8 @@ class Utils:
         defaults = {
             "target_url": "https://example.com",
             "threads": 5,
-            "viewtime": 5,
+            "viewtime_min": 5,
+            "viewtime_max": 10,
             "proxy_test_url": "http://httpbin.org/json",
             "proxy_timeout": 10,
             "proxy_check_threads": 50,
@@ -53,7 +54,7 @@ class Utils:
             "use_http": True,
             "use_socks4": True,
             "use_socks5": True,
-            "hide_dead": True,  # Default to True for performance
+            "hide_dead": True,
             "headless": True,
             "sources": "sources.txt"
         }
@@ -98,9 +99,17 @@ class ProxyEngine:
 
         def fetch(url):
             try:
-                if "socks5" in url.lower() and not protocols.get("socks5"): return []
-                if "socks4" in url.lower() and not protocols.get("socks4"): return []
-                if "http" in url.lower() and not protocols.get("http"): return []
+                # FIX: More specific filtering so we don't kill the API URL
+                # Only filter based on known file names/extensions in the URL
+                u_lower = url.lower()
+
+                # Check explicit text lists
+                if "socks5.txt" in u_lower and not protocols.get("socks5"): return []
+                if "socks4.txt" in u_lower and not protocols.get("socks4"): return []
+                if "http.txt" in u_lower and not protocols.get("http"): return []
+
+                # If it's a dynamic API (proxyscrape), we trust the URL parameters we generated
+                # rather than filtering the URL string itself.
 
                 r = requests.get(url, timeout=10)
                 if r.status_code == 200: return pattern.findall(r.text)
@@ -308,10 +317,9 @@ class ModernTrafficBot(ctk.CTk):
             btn.grid(row=i + 1, column=0, sticky="ew", padx=10, pady=5)
             self.nav_btns[key] = btn
 
-        ctk.CTkLabel(self.sidebar, text="v3.0.6 Performance", text_color=COLORS["text_dim"], font=("Roboto", 10)).grid(
-            row=5,
-            column=0,
-            pady=20)
+        ctk.CTkLabel(self.sidebar, text="v3.1.0 Fixed", text_color=COLORS["text_dim"], font=("Roboto", 10)).grid(row=5,
+                                                                                                                 column=0,
+                                                                                                                 pady=20)
 
     def setup_pages(self):
         self.pages = {}
@@ -365,15 +373,25 @@ class ModernTrafficBot(ctk.CTk):
         self.slider_threads.set(self.settings.get("threads", 5))
         self.slider_threads.pack(fill="x", pady=5)
 
+        # VIEW DURATION: MIN SLIDER
         v_frame = ctk.CTkFrame(slider_row, fg_color="transparent")
         v_frame.pack(side="left", fill="x", expand=True, padx=20)
 
-        self.lbl_viewtime = ctk.CTkLabel(v_frame, text=f"View Duration: {self.settings.get('viewtime', 5)}s")
+        self.lbl_viewtime = ctk.CTkLabel(v_frame,
+                                         text=f"Duration: {self.settings.get('viewtime_min', 5)}s - {self.settings.get('viewtime_max', 10)}s")
         self.lbl_viewtime.pack(anchor="w")
 
-        self.slider_viewtime = ctk.CTkSlider(v_frame, from_=1, to=60, number_of_steps=59, command=self.update_view_lbl)
-        self.slider_viewtime.set(self.settings.get("viewtime", 5))
-        self.slider_viewtime.pack(fill="x", pady=5)
+        # Min Slider
+        ctk.CTkLabel(v_frame, text="Min:", font=("Roboto", 10)).pack(anchor="w")
+        self.slider_view_min = ctk.CTkSlider(v_frame, from_=1, to=60, number_of_steps=59, command=self.update_view_lbl)
+        self.slider_view_min.set(self.settings.get("viewtime_min", 5))
+        self.slider_view_min.pack(fill="x", pady=2)
+
+        # Max Slider
+        ctk.CTkLabel(v_frame, text="Max:", font=("Roboto", 10)).pack(anchor="w")
+        self.slider_view_max = ctk.CTkSlider(v_frame, from_=1, to=60, number_of_steps=59, command=self.update_view_lbl)
+        self.slider_view_max.set(self.settings.get("viewtime_max", 10))
+        self.slider_view_max.pack(fill="x", pady=2)
 
         self.btn_attack = ctk.CTkButton(cfg_frame, text="START CAMPAIGN", height=45, fg_color=COLORS["success"],
                                         font=("Roboto", 14, "bold"), command=self.toggle_attack)
@@ -387,7 +405,14 @@ class ModernTrafficBot(ctk.CTk):
         self.lbl_threads.configure(text=f"Concurrent Threads: {int(value)}")
 
     def update_view_lbl(self, value):
-        self.lbl_viewtime.configure(text=f"View Duration: {int(value)}s")
+        # Update logic to ensure min <= max visually if desired, or just show text
+        mn = int(self.slider_view_min.get())
+        mx = int(self.slider_view_max.get())
+
+        # Optional: Auto-correct sliders if crossed
+        # if mn > mx: mx = mn
+
+        self.lbl_viewtime.configure(text=f"Duration: {mn}s - {mx}s")
 
     def setup_proxy_ui(self, parent):
         tools = ctk.CTkFrame(parent, fg_color=COLORS["card"])
@@ -418,7 +443,7 @@ class ModernTrafficBot(ctk.CTk):
         if self.settings.get("use_socks5", True): self.chk_socks5.select()
         self.chk_socks5.pack(side="left", padx=10)
 
-        # NEW: Hide Dead Checkbox
+        # Hide Dead Checkbox
         self.chk_hide_dead = ctk.CTkCheckBox(proto_frm, text="Hide Dead", width=70, fg_color=COLORS["danger"])
         if self.settings.get("hide_dead", True): self.chk_hide_dead.select()
         self.chk_hide_dead.pack(side="right", padx=10)
@@ -595,7 +620,6 @@ class ModernTrafficBot(ctk.CTk):
                 try:
                     res = f.result()
 
-                    # PERFORMANCE: If Hide Dead is on and status is dead, skip buffering
                     if hide_dead and res["status"] != "Active":
                         continue
 
@@ -629,7 +653,13 @@ class ModernTrafficBot(ctk.CTk):
     def attack_manager(self):
         url = self.entry_url.get()
         threads = int(self.slider_threads.get())
-        viewtime = int(self.slider_viewtime.get())
+
+        # New Range Logic
+        v_min = int(self.slider_view_min.get())
+        v_max = int(self.slider_view_max.get())
+
+        # Safety correction
+        if v_min > v_max: v_min, v_max = v_max, v_min
 
         self.log(f"Starting attack: {threads} threads on {url}")
 
@@ -661,7 +691,8 @@ class ModernTrafficBot(ctk.CTk):
                     r = requests.get(url, headers=headers, proxies=proxies, timeout=10)
                     if r.status_code == 200:
                         self.stats["success"] += 1
-                        time.sleep(viewtime)
+                        # Variable sleep
+                        time.sleep(random.uniform(v_min, v_max))
                     else:
                         self.stats["fail"] += 1
                 except Exception:
@@ -682,7 +713,8 @@ class ModernTrafficBot(ctk.CTk):
         try:
             self.settings["target_url"] = self.entry_url.get()
             self.settings["threads"] = int(self.slider_threads.get())
-            self.settings["viewtime"] = int(self.slider_viewtime.get())
+            self.settings["viewtime_min"] = int(self.slider_view_min.get())
+            self.settings["viewtime_max"] = int(self.slider_view_max.get())
             self.settings["proxy_test_url"] = self.entry_test_url.get()
             self.settings["proxy_timeout"] = int(self.entry_timeout.get())
             self.settings["proxy_check_threads"] = int(self.entry_check_threads.get())
