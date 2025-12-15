@@ -1,5 +1,3 @@
 customtkinter
-playwright
 fake-useragent
-requests
-PySocks
+curl_cffi

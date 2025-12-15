@@ -38,17 +38,35 @@ Built with Python, DM-Trafficbot is architected to overcome the performance limi
 
 ## Getting Started
 
-1.  **Install Dependencies**:
+### Prerequisites
+- Python 3.10+
+- A virtual environment is recommended.
+
+### Installation & Running from Source
+1.  **Set up Virtual Environment**:
+    ```sh
+    python -m venv .venv
+    .venv\Scripts\activate  # Windows
+    source .venv/bin/activate # Linux/Mac
+    ```
+2.  **Install Dependencies**:
     ```sh
     pip install -r requirements.txt
     ```
-2.  **Configuration**:
-    -   Add your proxies to the `proxies/` directory.
-    -   Adjust operational settings in `settings.json`.
 3.  **Run the Application**:
     ```sh
     python main.py
     ```
+
+### Building the Executable
+You can build a standalone `.exe` file for easy distribution. The build script automatically enforces the virtual environment and bundles all assets.
+
+1.  **Run the Build Script**:
+    ```sh
+    python build.py
+    ```
+2.  **Locate the Output**:
+    The build script will generate a zip file `DarkMatterBot_v3.1.zip` in the root directory, containing the standalone executable.
 
 ## Disclaimer
 
