@@ -4,6 +4,7 @@ import time
 import os
 import asyncio
 import requests
+from queue import Queue, Empty
 from tkinter import filedialog
 from core.models import TrafficConfig, ProxyConfig, TrafficStats, ProxyCheckResult
 from core.engine import AsyncTrafficEngine
@@ -25,14 +26,14 @@ class ModernTrafficBot(ctk.CTk):
         self.running = False
         self.proxies = []
         self.active_proxy_count = 0
-        self.buffer = []
+        self.buffer = Queue()  # Thread-safe queue for proxy results
         self.stats = {"req": 0, "success": 0, "fail": 0}
         self.engine: AsyncTrafficEngine = None
         self.engine_thread: threading.Thread = None
 
         try:
             self.real_ip = requests.get("https://api.ipify.org", timeout=2).text
-        except:
+        except (requests.RequestException, OSError):
             self.real_ip = "0.0.0.0"
 
         self.grid_columnconfigure(1, weight=1)
@@ -84,11 +85,18 @@ class ModernTrafficBot(ctk.CTk):
         stats_frame.pack(fill="x", pady=(0, 20))
 
         self.lbl_stats = {}
+        # Color-code stats: green for success/proxies, red for failures, white for total
+        stat_colors = {
+            "req": COLORS["text"],      # White for total requests
+            "success": COLORS["success"], # Green for successful
+            "fail": COLORS["danger"],    # Red for failed
+            "proxies": COLORS["success"]  # Green for proxies loaded
+        }
         for key, title in [("req", "Total Requests"), ("success", "Successful Visits"), ("fail", "Failed / Timeout"), ("proxies", "Proxies Loaded")]:
             card = ctk.CTkFrame(stats_frame, fg_color=COLORS["card"])
             card.pack(side="left", fill="x", expand=True, padx=5)
             ctk.CTkLabel(card, text=title, font=("Roboto", 12), text_color=COLORS["text_dim"]).pack(pady=(15, 0))
-            l = ctk.CTkLabel(card, text="0", font=("Roboto", 28, "bold"), text_color=COLORS["accent"])
+            l = ctk.CTkLabel(card, text="0", font=("Roboto", 28, "bold"), text_color=stat_colors[key])
             l.pack(pady=(0, 15))
             self.lbl_stats[key] = l
 
@@ -201,7 +209,7 @@ class ModernTrafficBot(ctk.CTk):
                                              text_color=COLORS["text_dim"], font=("Roboto", 11))
         self.lbl_proto_counts.pack(side="right", padx=15)
 
-        self.lbl_bandwidth = ctk.CTkLabel(r_counts, text="Network Traffic: 0.00 Mbps", text_color=COLORS["accent"], font=("Roboto", 11, "bold"))
+        self.lbl_bandwidth = ctk.CTkLabel(r_counts, text="Network Traffic: 0.00 Mbps", text_color=COLORS["success"], font=("Roboto", 11, "bold"))
         self.lbl_bandwidth.pack(side="right", padx=5)
 
         r2 = ctk.CTkFrame(tools, fg_color=COLORS["bg"])
@@ -266,7 +274,12 @@ class ModernTrafficBot(ctk.CTk):
         card.pack(fill="x")
         self.chk_headless = ctk.CTkCheckBox(card, text="Headless Browser Mode (Invisible)", fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"])
         if self.settings.get("headless", True): self.chk_headless.select()
-        self.chk_headless.pack(anchor="w", padx=20, pady=20)
+        self.chk_headless.pack(anchor="w", padx=20, pady=(20, 10))
+
+        self.chk_verify_ssl = ctk.CTkCheckBox(card, text="Verify SSL Certificates (disable for self-signed certs)", fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"])
+        if self.settings.get("verify_ssl", True): self.chk_verify_ssl.select()
+        self.chk_verify_ssl.pack(anchor="w", padx=20, pady=(0, 20))
+
         ctk.CTkButton(card, text="Save Configuration", fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"], command=self.save_cfg).pack(anchor="w", padx=20, pady=(0, 20))
 
     def log(self, msg):
@@ -280,7 +293,7 @@ class ModernTrafficBot(ctk.CTk):
         if f:
             try:
                 self.proxies = []
-                self.buffer = []
+                self.buffer = Queue()  # Reset with fresh queue
                 self.proxy_grid.clear()
 
                 with open(f, 'r') as file:
@@ -292,12 +305,12 @@ class ModernTrafficBot(ctk.CTk):
                             l = "http://" + l
                         self.proxies.append(l)
                 
-                self.proxies = list(set(self.proxies)) # Deduplicate immediately
+                self.proxies = Utils.deduplicate_proxies(self.proxies)
 
                 self.update_proxy_stats()
                 self.log(f"Cleared previous data. Loaded {len(self.proxies)} unique proxies.")
-            except:
-                pass
+            except (IOError, OSError, UnicodeDecodeError) as e:
+                self.log(f"Error loading proxy file: {e}")
 
     def export_active(self):
         active_objs = self.proxy_grid.get_active_objects()
@@ -329,10 +342,7 @@ class ModernTrafficBot(ctk.CTk):
             self.log(f"Export Error: {e}")
 
     def run_scraper(self):
-        try:
-            th = int(self.entry_scrape_threads.get())
-        except:
-            th = 20
+        scrape_threads = Utils.safe_int(self.entry_scrape_threads.get(), default=20, min_val=1, max_val=100)
             
         scraper_proxy = self.entry_scraper_proxy.get().strip()
         proto = self.combo_scraper_proto.get()
@@ -350,13 +360,17 @@ class ModernTrafficBot(ctk.CTk):
         if self.chk_socks4.get(): protos.append("socks4")
         if self.chk_socks5.get(): protos.append("socks5")
         
-        sources_file = self.settings["sources"]
+        # Resolve sources file path relative to app directory
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sources_file = os.path.join(app_dir, self.settings["sources"])
+
         # Ensure sources file exists with defaults
         if not os.path.exists(sources_file):
+            os.makedirs(os.path.dirname(sources_file), exist_ok=True)
             with open(sources_file, "w") as f:
                 f.write("https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt\n")
                 f.write("https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt\n")
-                f.write(f"https://api.proxyscrape.com/v2/?request=getproxies&protocol=http,socks4,socks5&timeout=10000&country=all\n")
+                f.write("https://api.proxyscrape.com/v2/?request=getproxies&protocol=http,socks4,socks5&timeout=10000&country=all\n")
 
         def _job():
             self.log_safe(f"Scraping started (Async) using proxy: {scraper_proxy if scraper_proxy else 'Direct'}...")
@@ -393,19 +407,19 @@ class ModernTrafficBot(ctk.CTk):
                     now = time.time()
                     if now - last_time >= 1.0:
                         mbps = (scrape_bytes_buffer * 8) / 1024 / 1024 / (now - last_time)
-                        self.after(0, lambda m=mbps: self.lbl_bandwidth.configure(text=f"Scrape BW: {m:.2f} Mbps"))
+                        self.after(0, lambda m=mbps: self.lbl_bandwidth.configure(text=f"Scrape Traffic: {m:.2f} Mbps"))
                         last_time = now
                         scrape_bytes_buffer = 0
 
                 # Run threaded scraper
-                results = manager.scrape(urls, protos, max_threads=th, scraper_proxy=scraper_proxy, on_progress=on_progress_wrapper)
+                results = manager.scrape(urls, protos, max_threads=scrape_threads, scraper_proxy=scraper_proxy, on_progress=on_progress_wrapper)
                 
                 # Convert back to string format for the UI list for now (or update UI to hold objects)
                 # The UI currently expects simple strings in self.proxies
                 found_strings = [p.to_curl_cffi_format() for p in results]
                 
                 self.proxies.extend(found_strings)
-                self.proxies = list(set(self.proxies))
+                self.proxies = Utils.deduplicate_proxies(self.proxies)
 
                 self.after(0, self.update_proxy_stats)
                 self.log_safe(f"Scrape complete. Found {len(results)} proxies.")
@@ -483,12 +497,18 @@ class ModernTrafficBot(ctk.CTk):
     def tester_thread(self):
         self.progress_bar.pack(fill="x", pady=(0, 5))
         try:
-            url = self.entry_test_url.get()
-            to = int(self.entry_timeout.get())
-            if to < 100: to = 100
-            if to > 10000: to = 10000
+            url = self.entry_test_url.get().strip()
 
-            th = int(self.entry_check_threads.get())
+            # Validate test URL
+            if not Utils.validate_url(url):
+                self.log_safe("Invalid test URL. Must start with http:// or https://")
+                self.testing = False
+                self.after(0, lambda: self.progress_bar.pack_forget())
+                self.after(0, lambda: self.btn_test.configure(text="TEST ALL", fg_color=COLORS["success"]))
+                return
+
+            timeout_ms = Utils.safe_int(self.entry_timeout.get(), default=3000, min_val=100, max_val=30000)
+            check_threads = Utils.safe_int(self.entry_check_threads.get(), default=50, min_val=1, max_val=2000)
             hide_dead = self.chk_hide_dead.get()
             
             # Prepare ProxyConfig objects from self.proxies (strings)
@@ -528,8 +548,8 @@ class ModernTrafficBot(ctk.CTk):
                             # Map https -> http for config
                             protocol = "http" if scheme == "https" else scheme
                             check_configs.append(ProxyConfig(host=host, port=port, protocol=protocol))
-                except:
-                    pass
+                except (ValueError, IndexError, AttributeError):
+                    continue  # Skip malformed proxy strings
 
         except Exception as e:
             self.log_safe(f"Config Error: {e}")
@@ -560,7 +580,7 @@ class ModernTrafficBot(ctk.CTk):
                     "speed": res.speed,
                     "anonymity": res.anonymity
                 }
-                self.buffer.append(item)
+                self.buffer.put(item)  # Thread-safe put
 
             # Update progress bar and bandwidth occasionally
             if idx % 10 == 0 or idx == total:
@@ -571,7 +591,7 @@ class ModernTrafficBot(ctk.CTk):
                      # Est. 3KB per check (SSL handshake is heavy)
                      # Mbps = (diff * 3KB * 8 bits) / 1024 / 1024 / delta
                      mbps = (diff * 3 * 8) / 1024 / delta 
-                     self.after(0, lambda m=mbps: self.lbl_bandwidth.configure(text=f"Checker BW: {m:.2f} Mbps"))
+                     self.after(0, lambda m=mbps: self.lbl_bandwidth.configure(text=f"Checker Traffic: {m:.2f} Mbps"))
                      last_time = now
                      last_count = idx
                  
@@ -579,7 +599,7 @@ class ModernTrafficBot(ctk.CTk):
 
         # Run threaded check
         manager.check_proxies(
-            check_configs, url, to, self.real_ip, on_progress, concurrency=th,
+            check_configs, url, timeout_ms, self.real_ip, on_progress, concurrency=check_threads,
             pause_checker=lambda: self.testing_paused
         )
 
@@ -605,15 +625,20 @@ class ModernTrafficBot(ctk.CTk):
             self.engine_thread.start()
 
     def run_async_engine(self):
-        url = self.entry_url.get()
-        try:
-            threads = int(self.slider_threads.get())
-        except:
-            threads = 1
-            
-        v_min = int(self.slider_view_min.get())
-        v_max = int(self.slider_view_max.get())
-        if v_min > v_max: v_min, v_max = v_max, v_min
+        url = self.entry_url.get().strip()
+
+        # Validate URL
+        if not Utils.validate_url(url):
+            self.log_safe("Invalid URL. Must start with http:// or https://")
+            self.running = False
+            self.after(0, lambda: self.btn_attack.configure(text="START CAMPAIGN", fg_color=COLORS["success"]))
+            return
+
+        threads = Utils.safe_int(self.slider_threads.get(), default=1, min_val=1, max_val=500)
+        v_min = Utils.safe_int(self.slider_view_min.get(), default=5, min_val=1, max_val=300)
+        v_max = Utils.safe_int(self.slider_view_max.get(), default=10, min_val=1, max_val=300)
+        if v_min > v_max:
+            v_min, v_max = v_max, v_min
 
         self.log(f"Starting Async Engine: {threads} threads on {url}")
 
@@ -641,8 +666,8 @@ class ModernTrafficBot(ctk.CTk):
                          port=int(p['port']),
                          protocol=protocol
                      ))
-                 except:
-                     pass
+                 except (ValueError, KeyError, TypeError):
+                     continue  # Skip malformed proxy entries
 
         if not engine_proxies and all_active:
             self.log_safe(f"Warning: Proxies active but filtered by protocol.")
@@ -655,10 +680,11 @@ class ModernTrafficBot(ctk.CTk):
         config = TrafficConfig(
             target_url=url,
             max_threads=threads,
-            total_visits=0, # Infinite
+            total_visits=0,  # Infinite
             min_duration=v_min,
             max_duration=v_max,
-            headless=self.settings.get("headless", True)
+            headless=self.settings.get("headless", True),
+            verify_ssl=self.settings.get("verify_ssl", True)
         )
 
         # Initialize Engine
@@ -680,32 +706,44 @@ class ModernTrafficBot(ctk.CTk):
         self.log("Campaign statistics reset.")
 
     def on_engine_update(self, stats: TrafficStats):
-        # Callback from async engine, must invoke on main thread
-        self.stats["req"] = stats.total_requests
-        self.stats["success"] = stats.success
-        self.stats["fail"] = stats.failed
-        self.active_proxy_count = stats.active_proxies
-        # We don't need to force update GUI here, update_gui_loop handles it periodically
+        # Callback from async engine - schedule on main GUI thread for thread safety
+        # Copy values to avoid race conditions (stats object may change before callback runs)
+        req = stats.total_requests
+        success = stats.success
+        fail = stats.failed
+        proxies = stats.active_proxies
+
+        def update_on_main_thread():
+            self.stats["req"] = req
+            self.stats["success"] = success
+            self.stats["fail"] = fail
+            self.active_proxy_count = proxies
+
+        self.after(0, update_on_main_thread)
 
     def log_safe(self, msg):
         self.after(0, lambda: self.log(msg))
 
     def save_cfg(self):
         try:
-            self.settings["target_url"] = self.entry_url.get()
-            self.settings["threads"] = int(self.slider_threads.get())
-            self.settings["viewtime_min"] = int(self.slider_view_min.get())
-            self.settings["viewtime_max"] = int(self.slider_view_max.get())
-            self.settings["proxy_test_url"] = self.entry_test_url.get()
+            target_url = self.entry_url.get().strip()
+            test_url = self.entry_test_url.get().strip()
 
-            # Save timeout with clamp
-            t_val = int(self.entry_timeout.get())
-            if t_val < 100: t_val = 100
-            if t_val > 10000: t_val = 10000
-            self.settings["proxy_timeout"] = t_val
+            # Validate URLs before saving
+            if target_url and not Utils.validate_url(target_url):
+                self.log("Warning: Target URL appears invalid")
 
-            self.settings["proxy_check_threads"] = int(self.entry_check_threads.get())
-            self.settings["proxy_scrape_threads"] = int(self.entry_scrape_threads.get())
+            if test_url and not Utils.validate_url(test_url):
+                self.log("Warning: Test URL appears invalid")
+
+            self.settings["target_url"] = target_url
+            self.settings["threads"] = Utils.safe_int(self.slider_threads.get(), default=5, min_val=1, max_val=500)
+            self.settings["viewtime_min"] = Utils.safe_int(self.slider_view_min.get(), default=5, min_val=1, max_val=300)
+            self.settings["viewtime_max"] = Utils.safe_int(self.slider_view_max.get(), default=10, min_val=1, max_val=300)
+            self.settings["proxy_test_url"] = test_url
+            self.settings["proxy_timeout"] = Utils.safe_int(self.entry_timeout.get(), default=3000, min_val=100, max_val=30000)
+            self.settings["proxy_check_threads"] = Utils.safe_int(self.entry_check_threads.get(), default=50, min_val=1, max_val=2000)
+            self.settings["proxy_scrape_threads"] = Utils.safe_int(self.entry_scrape_threads.get(), default=20, min_val=1, max_val=100)
             self.settings["scraper_proxy"] = self.entry_scraper_proxy.get().strip()
             self.settings["scraper_proxy_protocol"] = self.combo_scraper_proto.get()
             self.settings["use_scraper_proxy"] = self.chk_use_scraper_proxy.get()
@@ -714,17 +752,25 @@ class ModernTrafficBot(ctk.CTk):
             self.settings["use_socks5"] = self.chk_socks5.get()
             self.settings["hide_dead"] = self.chk_hide_dead.get()
             self.settings["headless"] = self.chk_headless.get()
+            self.settings["verify_ssl"] = self.chk_verify_ssl.get()
             Utils.save_settings(self.settings)
             self.log("Settings saved.")
         except Exception as e:
             self.log(f"Error saving settings: {e}")
 
     def update_gui_loop(self):
-        if self.buffer:
-            chunk = self.buffer[:40]
-            del self.buffer[:40]
-            for i in chunk: self.proxy_grid.add(i)
-            if len(self.buffer) % 5 == 0: self.update_proxy_stats()
+        # Drain up to 40 items from the thread-safe queue
+        items_processed = 0
+        while items_processed < 40:
+            try:
+                item = self.buffer.get_nowait()
+                self.proxy_grid.add(item)
+                items_processed += 1
+            except Empty:
+                break
+
+        if items_processed > 0:
+            self.update_proxy_stats()
 
         self.lbl_stats["req"].configure(text=str(self.stats["req"]))
         self.lbl_stats["success"].configure(text=str(self.stats["success"]))

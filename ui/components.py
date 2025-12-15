@@ -98,6 +98,20 @@ class VirtualGrid(ctk.CTkFrame):
                 item['status'], f"{item['speed']} ms", item['anonymity']
             ]
             for c, val in enumerate(vals):
-                color = COLORS["success"] if c == 3 and val == "Active" else COLORS["text"]
+                # Color-code: Status (col 3) and Ping (col 4)
+                if c == 3:  # Status column
+                    color = COLORS["success"] if val == "Active" else COLORS["danger"]
+                elif c == 4:  # Ping column - color by speed
+                    speed = item.get('speed', 9999)
+                    if speed <= 2500:
+                        color = COLORS["success"]  # Green
+                    elif speed <= 5000:
+                        color = "#F1C40F"          # Yellow
+                    elif speed <= 7500:
+                        color = COLORS["warning"]  # Orange
+                    else:
+                        color = COLORS["danger"]   # Red
+                else:
+                    color = COLORS["text"]
                 self.canvas.create_text((c * col_w) + 10, y + 15, text=str(val), fill=color, anchor="w",
                                         font=("Roboto", 10))

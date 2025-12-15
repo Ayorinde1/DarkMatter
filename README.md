@@ -1,5 +1,7 @@
 # DarkMatter Traffic Bot (DM-Trafficbot)
 
+**Version 3.1.2**
+
 DM-Trafficbot is a sophisticated, high-performance traffic generation and proxy validation tool designed for advanced web analytics, load testing, and automation. It moves beyond simple request flooding by emulating human behavior and employing techniques to bypass advanced bot detection systems.
 
 ## Core Features
@@ -66,7 +68,30 @@ You can build a standalone `.exe` file for easy distribution. The build script a
     python build.py
     ```
 2.  **Locate the Output**:
-    The build script will generate a zip file `DarkMatterBot_v3.1.zip` in the root directory, containing the standalone executable.
+    The build script will generate a zip file `DarkMatterBot_v3.1.2.zip` in the root directory, containing the standalone executable.
+
+## Changelog
+
+### v3.1.2
+- Fixed dashboard stats glitching/reverting issue (thread-safety fix)
+- Color-coded dashboard stats (green for success, red for failures)
+- Color-coded proxy ping values (green/yellow/orange/red based on latency)
+- Green network traffic indicator for better visibility
+- Improved proxy sources with 60+ reliable endpoints
+- Fixed proxy checker to find more live proxies
+
+### v3.1.1
+- Security: SSL verification now configurable
+- Error handling improvements throughout codebase
+- Input validation for URLs and numeric fields
+- Thread-safe queue-based GUI updates
+- Session pooling for better performance
+- Centralized constants file
+
+### v3.1.0
+- Brand refresh with Dark Matter purple theme
+- Single-file executable build system
+- Hybrid concurrency model (asyncio + threading)
 
 ## Disclaimer
 

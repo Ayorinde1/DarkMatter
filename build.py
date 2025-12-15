@@ -38,7 +38,6 @@ def build_executable():
         "--icon=resources/favicon.ico",
         f"--add-data=resources{sep}resources",
         f"--add-data=ui{sep}ui",
-        "--hidden-import=PIL._tkinter_finder",
         "--hidden-import=customtkinter",
         "--hidden-import=curl_cffi",
         "--name=DarkMatterBot",
@@ -52,10 +51,10 @@ def build_executable():
         # Create a zip file for distribution
         print("Creating distribution archive...")
         import zipfile
-        with zipfile.ZipFile("DarkMatterBot_v3.1.zip", "w", zipfile.ZIP_DEFLATED) as zipf:
-             zipf.write("dist/DarkMatterBot.exe", "DarkMatterBot.exe")
-             
-        print("Archive created: DarkMatterBot_v3.1.zip")
+        with zipfile.ZipFile("DarkMatterBot_v3.1.2.zip", "w", zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write("dist/DarkMatterBot.exe", "DarkMatterBot.exe")
+
+        print("Archive created: DarkMatterBot_v3.1.2.zip")
         
     except subprocess.CalledProcessError as e:
         print(f"\nBuild failed: {e}")

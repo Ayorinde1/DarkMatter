@@ -7,6 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 from curl_cffi import requests
 from .header_manager import HeaderManager
 from .models import ProxyConfig, ProxyCheckResult
+from .constants import (
+    SCRAPE_TIMEOUT_SECONDS,
+    PROXY_CHECK_BATCH_SIZE,
+    DEAD_PROXY_SPEED_MS,
+)
 
 class ThreadedProxyManager:
     def __init__(self):
@@ -24,8 +29,8 @@ class ThreadedProxyManager:
                 proxies = {"http": scraper_proxy, "https": scraper_proxy} if scraper_proxy else None
                 
                 response = std_requests.get(
-                    url, 
-                    timeout=15, 
+                    url,
+                    timeout=SCRAPE_TIMEOUT_SECONDS,
                     headers=h,
                     proxies=proxies
                 )
@@ -105,9 +110,8 @@ class ThreadedProxyManager:
             futures = []
             
             # Staggered Launch to prevent UI freeze
-            batch_size = 50
-            for i in range(0, len(proxies), batch_size):
-                batch = proxies[i:i + batch_size]
+            for i in range(0, len(proxies), PROXY_CHECK_BATCH_SIZE):
+                batch = proxies[i:i + PROXY_CHECK_BATCH_SIZE]
                 for p in batch:
                     futures.append(ex.submit(check_single, p))
                 
@@ -130,7 +134,7 @@ class ThreadedProxyManager:
         result = ProxyCheckResult(
             proxy=proxy,
             status="Dead",
-            speed=9999,
+            speed=DEAD_PROXY_SPEED_MS,
             type=proxy.protocol.upper(),
             country="??",
             country_code="??"
@@ -138,22 +142,28 @@ class ThreadedProxyManager:
 
         proxy_url = proxy.to_curl_cffi_format()
         proxies_dict = {"http": proxy_url, "https": proxy_url}
-        
+        timeout_sec = max(timeout_ms / 1000, 1.0)  # Minimum 1 second timeout
+
         start_time = time.time()
         try:
-            # Synchronous Session
-            with requests.Session(impersonate="chrome120", proxies=proxies_dict) as session:
-                resp = session.get(target_url, timeout=timeout_ms / 1000)
-                
+            # Synchronous Session - don't pass proxies to constructor, pass to request
+            with requests.Session(impersonate="chrome120") as session:
+                resp = session.get(
+                    target_url,
+                    timeout=timeout_sec,
+                    proxies=proxies_dict,
+                    verify=False  # Many proxy test endpoints have cert issues
+                )
+
                 latency = int((time.time() - start_time) * 1000)
                 result.speed = latency
                 result.status = "Active"
-                
+
                 # If target was HTTPS and it worked, label as HTTPS proxy
                 if target_url.lower().startswith("https://") and result.type == "HTTP":
                     result.type = "HTTPS"
 
-                # Check Anonymity
+                # Check Anonymity (only works with httpbin-like endpoints)
                 try:
                     data = resp.json()
                     origin = data.get("origin", "")
@@ -161,9 +171,9 @@ class ThreadedProxyManager:
                         result.anonymity = "Transparent"
                     else:
                         result.anonymity = "Elite"
-                except:
-                    pass
-                
+                except (ValueError, KeyError, AttributeError):
+                    pass  # Response wasn't JSON or missing expected fields
+
                 # Score Calculation
                 # Higher is better. 1000ms = 1.0. 100ms = 10.0.
                 base_score = 1000.0 / max(latency, 1)
@@ -171,11 +181,12 @@ class ThreadedProxyManager:
                     base_score *= 1.5
                 elif result.anonymity == "Transparent":
                     base_score *= 0.5
-                
-                result.score = round(base_score, 2)
-                proxy.score = result.score # Store on config for Engine use
 
-        except Exception:
-            pass
-            
+                result.score = round(base_score, 2)
+                proxy.score = result.score  # Store on config for Engine use
+
+        except Exception as e:
+            # Log failed proxies at debug level for troubleshooting
+            logging.debug(f"Proxy {proxy.host}:{proxy.port} failed: {type(e).__name__}: {e}")
+
         return result

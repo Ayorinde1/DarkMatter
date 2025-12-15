@@ -1,3 +1,11 @@
-customtkinter
-fake-useragent
-curl_cffi
+# GUI Framework
+customtkinter>=5.2.0
+
+# User-Agent generation
+fake-useragent>=1.4.0
+
+# HTTP client with TLS fingerprinting
+curl_cffi>=0.7.0
+
+# Standard library dependencies (included for documentation)
+# asyncio, threading, queue, logging - all built-in

@@ -1,5 +1,9 @@
 # IDE settings
 .idea/
+.vscode/
+
+# Claude Code
+.claude/
 
 # Virtual environment
 .venv/

@@ -1,6 +1,7 @@
 import json
 import random
 import os
+import logging
 from fake_useragent import UserAgent
 
 class HeaderManager:
@@ -17,8 +18,8 @@ class HeaderManager:
                 cls._load_user_agents_txt()
             try:
                 cls._ua_fallback_lib = UserAgent()
-            except:
-                pass
+            except Exception:
+                cls._ua_fallback_lib = None
         return cls._instance
 
     @classmethod
@@ -39,7 +40,7 @@ class HeaderManager:
                         if headers and "User-Agent" in headers:
                             cls._profiles_pool.append(headers)
             except Exception as e:
-                print(f"Error loading header profiles: {e}")
+                logging.warning(f"Error loading header profiles: {e}")
         
     @classmethod
     def _load_user_agents_txt(cls):
@@ -52,7 +53,7 @@ class HeaderManager:
                         if ua:
                             cls._user_agents_pool.append(ua)
             except Exception as e:
-                print(f"Error loading user-agents.txt: {e}")
+                logging.warning(f"Error loading user-agents.txt: {e}")
 
     @classmethod
     def get_random_headers(cls):

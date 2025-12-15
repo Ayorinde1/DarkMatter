@@ -23,6 +23,7 @@ class TrafficConfig:
     min_duration: int  # Seconds
     max_duration: int  # Seconds
     headless: bool = True  # Not strictly used by curl_cffi but good for config completeness
+    verify_ssl: bool = True  # Verify SSL certificates (disable only for self-signed certs)
 
 @dataclass
 class TrafficStats:
