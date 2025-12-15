@@ -4,6 +4,12 @@
 # Virtual environment
 .venv/
 
+# PyInstaller artifacts
+*.spec
+dist/
+build/
+*.zip
+
 # Proxies
 proxies/
 
